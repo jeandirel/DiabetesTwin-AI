@@ -7,7 +7,6 @@ import pandas as pd
 
 from .models import LifestyleScenario, PatientProfile
 
-
 MIN_GLUCOSE = 45.0
 MAX_GLUCOSE = 400.0
 
