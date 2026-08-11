@@ -10,7 +10,10 @@ from diabetestwin.cgmacros import discover_participant_files
 
 
 def _numeric(series: pd.Series) -> pd.Series:
-    return pd.to_numeric(series.astype(str).str.replace(r"[^0-9eE+\-.]", "", regex=True), errors="coerce")
+    return pd.to_numeric(
+        series.astype(str).str.replace(r"[^0-9eE+\-.]", "", regex=True),
+        errors="coerce",
+    )
 
 
 def _parse_timestamp(series: pd.Series) -> pd.Series:
@@ -21,12 +24,18 @@ def _parse_timestamp(series: pd.Series) -> pd.Series:
         return pd.to_datetime(series, errors="coerce")
 
 
-def _near_future_count(frame: pd.DataFrame, minutes: int = 30, tolerance_minutes: float = 7.5) -> int:
+def _near_future_count(
+    frame: pd.DataFrame,
+    minutes: int = 30,
+    tolerance_minutes: float = 7.5,
+) -> int:
     if frame.empty:
         return 0
     left = frame[["timestamp"]].copy()
     left["wanted"] = left["timestamp"] + pd.Timedelta(minutes=minutes)
-    right = frame[["timestamp", "glucose"]].rename(columns={"timestamp": "matched_timestamp"}).copy()
+    right = frame[["timestamp", "glucose"]].rename(
+        columns={"timestamp": "matched_timestamp"}
+    )
     left = left.sort_values("wanted")
     right = right.sort_values("matched_timestamp")
     merged = pd.merge_asof(
@@ -37,8 +46,19 @@ def _near_future_count(frame: pd.DataFrame, minutes: int = 30, tolerance_minutes
         direction="nearest",
         tolerance=pd.Timedelta(minutes=tolerance_minutes),
     )
-    valid = merged["matched_timestamp"].notna() & (merged["matched_timestamp"] > merged["timestamp"])
+    valid = merged["matched_timestamp"].notna() & (
+        merged["matched_timestamp"] > merged["timestamp"]
+    )
     return int(valid.sum())
+
+
+def _sensor_frame(timestamp: pd.Series, glucose: pd.Series) -> pd.DataFrame:
+    return (
+        pd.DataFrame({"timestamp": timestamp, "glucose": glucose})
+        .dropna()
+        .drop_duplicates("timestamp")
+        .sort_values("timestamp")
+    )
 
 
 def main() -> None:
@@ -62,14 +82,29 @@ def main() -> None:
         raw.columns = [str(column).lstrip("\ufeff").strip() for column in raw.columns]
         if index == 0:
             print("columns=" + repr(raw.columns.tolist()))
-            print("timestamp_examples=" + repr(raw.get("Timestamp", pd.Series(dtype=str)).dropna().astype(str).head(8).tolist()))
+            examples = (
+                raw.get("Timestamp", pd.Series(dtype=str))
+                .dropna()
+                .astype(str)
+                .head(8)
+                .tolist()
+            )
+            print("timestamp_examples=" + repr(examples))
 
         parsed = _parse_timestamp(raw["Timestamp"])
-        dexcom = _numeric(raw["Dexcom GL"]) if "Dexcom GL" in raw.columns else pd.Series(np.nan, index=raw.index)
-        libre = _numeric(raw["Libre GL"]) if "Libre GL" in raw.columns else pd.Series(np.nan, index=raw.index)
+        dexcom = (
+            _numeric(raw["Dexcom GL"])
+            if "Dexcom GL" in raw.columns
+            else pd.Series(np.nan, index=raw.index)
+        )
+        libre = (
+            _numeric(raw["Libre GL"])
+            if "Libre GL" in raw.columns
+            else pd.Series(np.nan, index=raw.index)
+        )
 
-        dex = pd.DataFrame({"timestamp": parsed, "glucose": dexcom}).dropna().drop_duplicates("timestamp").sort_values("timestamp")
-        lib = pd.DataFrame({"timestamp": parsed, "glucose": libre}).dropna().drop_duplicates("timestamp").sort_values("timestamp")
+        dex = _sensor_frame(parsed, dexcom)
+        lib = _sensor_frame(parsed, libre)
 
         dex_diff = dex["timestamp"].diff().dt.total_seconds().div(60).dropna()
         lib_diff = lib["timestamp"].diff().dt.total_seconds().div(60).dropna()
