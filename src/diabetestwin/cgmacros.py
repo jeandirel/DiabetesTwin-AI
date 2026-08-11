@@ -35,7 +35,17 @@ def _clean_columns(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def _numeric(series: pd.Series) -> pd.Series:
-    return pd.to_numeric(series.astype(str).str.replace(r"[^0-9eE+\-.]", "", regex=True), errors="coerce")
+    return pd.to_numeric(
+        series.astype(str).str.replace(r"[^0-9eE+\-.]", "", regex=True),
+        errors="coerce",
+    )
+
+
+def _parse_timestamps(series: pd.Series) -> pd.Series:
+    try:
+        return pd.to_datetime(series, errors="coerce", format="mixed")
+    except TypeError:
+        return pd.to_datetime(series, errors="coerce")
 
 
 def _participant_id(path: Path) -> str:
@@ -70,7 +80,10 @@ def _diagnosis_from_hba1c(value: float | int | None) -> str:
     return "type2_diabetes"
 
 
-def _bio_rows_by_participant(root: Path, participant_ids: list[str]) -> dict[str, dict[str, object]]:
+def _bio_rows_by_participant(
+    root: Path,
+    participant_ids: list[str],
+) -> dict[str, dict[str, object]]:
     bio_path = _find_bio_file(root)
     if bio_path is None:
         return {participant_id: {} for participant_id in participant_ids}
@@ -115,23 +128,46 @@ def _rolling_event_sum(
 
     event_values = _numeric(events[value_column])
     valid = events["Timestamp"].notna() & event_values.notna()
-    for event_time, magnitude in zip(events.loc[valid, "Timestamp"], event_values.loc[valid], strict=False):
+    for event_time, magnitude in zip(
+        events.loc[valid, "Timestamp"],
+        event_values.loc[valid],
+        strict=False,
+    ):
         age = (timestamps - event_time).dt.total_seconds() / 60.0
-        result += np.where((age >= 0.0) & (age <= window_minutes), float(magnitude), 0.0)
+        result += np.where(
+            (age >= 0.0) & (age <= window_minutes),
+            float(magnitude),
+            0.0,
+        )
     return result
 
 
-def _pick_glucose_column(frame: pd.DataFrame, glucose_source: str) -> tuple[str, int, str]:
+def _pick_glucose_column(frame: pd.DataFrame, glucose_source: str) -> tuple[str, str]:
     requested = glucose_source.lower().strip()
     if requested not in {"dexcom", "libre", "auto"}:
         raise ValueError("glucose_source must be one of: dexcom, libre, auto")
 
     if requested in {"dexcom", "auto"} and "Dexcom GL" in frame.columns:
         if _numeric(frame["Dexcom GL"]).notna().any():
-            return "Dexcom GL", 5, "dexcom"
+            return "Dexcom GL", "dexcom"
     if "Libre GL" in frame.columns and _numeric(frame["Libre GL"]).notna().any():
-        return "Libre GL", 15, "libre"
+        return "Libre GL", "libre"
     raise ValueError("No usable Dexcom GL or Libre GL column found")
+
+
+def _sampling_interval_minutes(timestamps: pd.Series) -> float:
+    gaps = timestamps.diff().dt.total_seconds().div(60.0)
+    gaps = gaps[(gaps > 0.0) & (gaps <= 30.0)]
+    if gaps.empty:
+        raise ValueError("Cannot infer CGMacros sampling interval")
+    return float(gaps.median())
+
+
+def _sensor_column(selected: pd.DataFrame, *candidates: str) -> np.ndarray:
+    for column in candidates:
+        if column in selected.columns:
+            return _numeric(selected[column]).to_numpy()
+    return np.full(len(selected), np.nan, dtype=float)
 
 
 def load_participant(
@@ -147,16 +183,24 @@ def load_participant(
     if "Timestamp" not in raw.columns:
         raise ValueError(f"Timestamp column missing from {csv_path}")
 
-    raw["Timestamp"] = pd.to_datetime(raw["Timestamp"], errors="coerce")
+    raw["Timestamp"] = _parse_timestamps(raw["Timestamp"])
     raw = raw.dropna(subset=["Timestamp"]).sort_values("Timestamp").reset_index(drop=True)
-    glucose_column, sampling_minutes, resolved_source = _pick_glucose_column(raw, glucose_source)
+    glucose_column, resolved_source = _pick_glucose_column(raw, glucose_source)
     glucose = _numeric(raw[glucose_column])
 
     selected = raw.loc[glucose.notna()].copy()
     selected["glucose_mg_dl"] = glucose.loc[glucose.notna()].astype(float).to_numpy()
-    selected = selected.drop_duplicates(subset=["Timestamp"]).sort_values("Timestamp").reset_index(drop=True)
-    if len(selected) < 12:
+    selected = (
+        selected.drop_duplicates(subset=["Timestamp"])
+        .sort_values("Timestamp")
+        .reset_index(drop=True)
+    )
+    if len(selected) < 60:
         return pd.DataFrame(), resolved_source
+
+    # CGMacros' released, merged participant CSVs are aligned to a one-minute timeline.
+    # Infer the cadence from the released file instead of assuming the native CGM cadence.
+    sampling_minutes = _sampling_interval_minutes(selected["Timestamp"])
 
     meal_mask = pd.Series(False, index=raw.index)
     if "Meal Type" in raw.columns:
@@ -189,15 +233,17 @@ def load_participant(
             window_minutes=120,
         )
 
-    for output, source in [("heart_rate", "HR"), ("mets", "Mets"), ("activity_calories", "Calories (Activity)")]:
-        if source in selected.columns:
-            frame[output] = _numeric(selected[source]).to_numpy()
-        else:
-            frame[output] = np.nan
+    frame["heart_rate"] = _sensor_column(selected, "HR")
+    frame["mets"] = _sensor_column(selected, "METs", "Mets")
+    frame["activity_calories"] = _sensor_column(selected, "Calories (Activity)")
 
     indexed = frame.set_index("timestamp")
-    frame["heart_rate_mean_30m"] = indexed["heart_rate"].rolling("30min", min_periods=1).mean().to_numpy()
-    frame["mets_mean_60m"] = indexed["mets"].rolling("60min", min_periods=1).mean().to_numpy()
+    frame["heart_rate_mean_30m"] = (
+        indexed["heart_rate"].rolling("30min", min_periods=1).mean().to_numpy()
+    )
+    frame["mets_mean_60m"] = (
+        indexed["mets"].rolling("60min", min_periods=1).mean().to_numpy()
+    )
     frame["activity_calories_60m"] = (
         indexed["activity_calories"].rolling("60min", min_periods=1).sum().to_numpy()
     )
@@ -206,7 +252,11 @@ def load_participant(
     frame["age"] = _static_value(row, "Age")
     frame["bmi"] = _static_value(row, "BMI")
     frame["hba1c"] = _static_value(row, "A1c PDL (Lab)", "A1c")
-    frame["fasting_glucose"] = _static_value(row, "Fasting GLU - PDL (Lab)", "Fasting BG")
+    frame["fasting_glucose"] = _static_value(
+        row,
+        "Fasting GLU - PDL (Lab)",
+        "Fasting BG",
+    )
     frame["fasting_insulin"] = _static_value(row, "Insulin", "Insulin ")
     frame["diagnosis"] = _diagnosis_from_hba1c(frame["hba1c"].iloc[0])
 
@@ -218,12 +268,24 @@ def load_participant(
     frame["glucose_lag_30m"] = frame["glucose_mg_dl"].shift(lag_30_steps)
     frame["glucose_delta_15m"] = frame["glucose_mg_dl"] - frame["glucose_lag_15m"]
     frame["target_30m"] = frame["glucose_mg_dl"].shift(-horizon_steps)
+
+    lag_15_timestamp = frame["timestamp"].shift(lag_15_steps)
+    lag_30_timestamp = frame["timestamp"].shift(lag_30_steps)
     frame["target_timestamp"] = frame["timestamp"].shift(-horizon_steps)
 
-    expected = float(horizon_steps * sampling_minutes)
-    actual = (frame["target_timestamp"] - frame["timestamp"]).dt.total_seconds() / 60.0
-    tolerance = float(sampling_minutes * 1.5)
-    frame = frame[(actual - expected).abs() <= tolerance].copy()
+    lag_15_actual = (frame["timestamp"] - lag_15_timestamp).dt.total_seconds() / 60.0
+    lag_30_actual = (frame["timestamp"] - lag_30_timestamp).dt.total_seconds() / 60.0
+    target_actual = (frame["target_timestamp"] - frame["timestamp"]).dt.total_seconds() / 60.0
+
+    tolerance = max(2.0, sampling_minutes * 2.0)
+    valid_timing = (
+        (lag_15_actual - 15.0).abs() <= tolerance
+    ) & (
+        (lag_30_actual - 30.0).abs() <= tolerance
+    ) & (
+        (target_actual - float(horizon_minutes)).abs() <= tolerance
+    )
+    frame = frame[valid_timing].copy()
     frame = frame.dropna(subset=["glucose_lag_30m", "target_30m"]).reset_index(drop=True)
     return frame, resolved_source
 
@@ -238,7 +300,8 @@ def load_cgmacros_dataset(
     files = discover_participant_files(root_path)
     if not files:
         raise FileNotFoundError(
-            f"No CGMacros participant CSV files found below {root_path}. Run scripts/download_cgmacros.py first."
+            f"No CGMacros participant CSV files found below {root_path}. "
+            "Run scripts/download_cgmacros.py first."
         )
 
     participant_ids = [_participant_id(path) for path in files]
