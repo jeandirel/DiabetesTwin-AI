@@ -5,6 +5,14 @@ from api import app
 client = TestClient(app)
 
 
+def test_root_dashboard():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "DiabetesTwin-AI" in response.text
+    assert "Digital twin simulation" in response.text
+    assert "Real CGM explorer" in response.text
+
+
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200
@@ -37,4 +45,14 @@ def test_simulate_endpoint():
     assert response.status_code == 200
     body = response.json()
     assert len(body["points"]) == 288
+    assert 0 <= body["metrics"]["time_in_range_pct"] <= 100
+
+
+def test_demo_cgmacros_endpoint():
+    response = client.get("/demo/cgmacros", params={"participant_id": "001", "max_points": 300})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["participant_id"] == "001"
+    assert body["license"] == "CC BY-NC-SA 4.0"
+    assert 0 < len(body["points"]) <= 320
     assert 0 <= body["metrics"]["time_in_range_pct"] <= 100
