@@ -89,7 +89,10 @@ def main() -> None:
         "doi": DOI,
         "license": LICENSE,
         "purpose": "Non-clinical deployment/demo subset",
-        "selection": "One released participant per HbA1c-derived dataset group; earliest 48-hour usable window by default.",
+        "selection": (
+            "One released participant per HbA1c-derived dataset group; "
+            "earliest 48-hour usable window by default."
+        ),
         "rows": int(len(demo)),
         "participants": participants,
         "privacy": "Timestamps remain privacy-shifted exactly as released by CGMacros.",
