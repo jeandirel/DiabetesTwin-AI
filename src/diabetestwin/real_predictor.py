@@ -141,10 +141,12 @@ def train_personalized_real_predictor(
     seed: int = 42,
 ) -> RealTrainedPredictor:
     """Train and evaluate a participant-specific 30-minute glucose predictor chronologically."""
-    participant = dataset.frame[dataset.frame["participant_id"].astype(str) == str(participant_id)].copy()
+    normalized_id = str(participant_id).zfill(3)
+    participant_ids = dataset.frame["participant_id"].astype(str).str.zfill(3)
+    participant = dataset.frame[participant_ids == normalized_id].copy()
     participant = participant.sort_values("timestamp").reset_index(drop=True)
     if len(participant) < 60:
-        raise ValueError(f"Participant {participant_id} does not have enough usable samples")
+        raise ValueError(f"Participant {normalized_id} does not have enough usable samples")
 
     split = int(len(participant) * train_fraction)
     split = min(max(split, 30), len(participant) - 20)
