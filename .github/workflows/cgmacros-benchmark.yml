@@ -11,6 +11,7 @@ on:
       - "scripts/diagnose_cgmacros.py"
       - "scripts/preprocess_cgmacros.py"
       - "scripts/train_real_model.py"
+      - "scripts/benchmark_personalized.py"
   workflow_dispatch:
 
 jobs:
@@ -35,14 +36,18 @@ jobs:
         run: python scripts/train_real_model.py --compare --split grouped
       - name: Train grouped HGB baseline
         run: python scripts/train_real_model.py --model hgb --split grouped
+      - name: Benchmark personalized HGB models
+        run: python scripts/benchmark_personalized.py --model hgb
       - name: Print benchmark outputs
         run: |
           echo "=== Dataset summary ==="
           cat data/processed/cgmacros_forecasting.csv.gz.summary.json
-          echo "=== Model comparison ==="
+          echo "=== Grouped model comparison ==="
           cat artifacts/cgmacros_grouped_comparison.csv
-          echo "=== HGB metrics ==="
+          echo "=== Grouped HGB metrics ==="
           cat artifacts/cgmacros_hgb_grouped_metrics.json
+          echo "=== Personalized HGB summary ==="
+          cat artifacts/cgmacros_personalized_hgb_summary.json
       - name: Upload benchmark metrics
         uses: actions/upload-artifact@v4
         with:
@@ -51,4 +56,6 @@ jobs:
             data/processed/cgmacros_forecasting.csv.gz.summary.json
             artifacts/cgmacros_grouped_comparison.csv
             artifacts/cgmacros_hgb_grouped_metrics.json
+            artifacts/cgmacros_personalized_hgb_by_participant.csv
+            artifacts/cgmacros_personalized_hgb_summary.json
           retention-days: 14
