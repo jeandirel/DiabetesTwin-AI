@@ -47,9 +47,11 @@ def _build_model(model_name: str, *, seed: int) -> object:
         )
     if normalized in {"rf", "random_forest", "randomforest"}:
         return RandomForestRegressor(
-            n_estimators=240,
-            min_samples_leaf=3,
+            n_estimators=120,
+            max_depth=18,
+            min_samples_leaf=8,
             max_features=0.75,
+            max_samples=0.35,
             n_jobs=-1,
             random_state=seed,
         )
@@ -58,7 +60,13 @@ def _build_model(model_name: str, *, seed: int) -> object:
 
 def _pipeline(dataset: CGMacrosDataset, model_name: str, *, seed: int) -> Pipeline:
     numeric = ColumnTransformer(
-        [("numeric", Pipeline([("imputer", SimpleImputer(strategy="median"))]), dataset.feature_columns)],
+        [
+            (
+                "numeric",
+                Pipeline([("imputer", SimpleImputer(strategy="median"))]),
+                dataset.feature_columns,
+            )
+        ],
         remainder="drop",
     )
     return Pipeline([("preprocess", numeric), ("model", _build_model(model_name, seed=seed))])
@@ -99,7 +107,8 @@ def train_grouped_real_predictor(
     """Train on real CGMacros with a participant-level holdout.
 
     Participant IDs are used as groups so the test set contains unseen people. This is a stricter
-    estimate of cross-person generalization than a random row split and avoids leakage between nearby CGM points.
+    estimate of cross-person generalization than a random row split and avoids leakage between
+    nearby CGM points.
     """
     frame = dataset.frame.sort_values(["participant_id", "timestamp"]).reset_index(drop=True)
     if frame["participant_id"].nunique() < 3:
@@ -116,9 +125,13 @@ def train_grouped_real_predictor(
     model.fit(train[dataset.feature_columns], train[dataset.target_column])
     predicted = model.predict(test[dataset.feature_columns])
 
-    prediction_frame = test[["participant_id", "timestamp", "glucose_mg_dl", dataset.target_column]].copy()
+    prediction_frame = test[
+        ["participant_id", "timestamp", "glucose_mg_dl", dataset.target_column]
+    ].copy()
     prediction_frame["prediction_30m"] = predicted
-    prediction_frame = prediction_frame.sort_values(["participant_id", "timestamp"]).reset_index(drop=True)
+    prediction_frame = prediction_frame.sort_values(
+        ["participant_id", "timestamp"]
+    ).reset_index(drop=True)
 
     evaluation = _evaluation(
         dataset,
@@ -129,7 +142,12 @@ def train_grouped_real_predictor(
         train_samples=len(train),
         train_participants=train["participant_id"].nunique(),
     )
-    return RealTrainedPredictor(model=model, data=dataset, evaluation=evaluation, predictions=prediction_frame)
+    return RealTrainedPredictor(
+        model=model,
+        data=dataset,
+        evaluation=evaluation,
+        predictions=prediction_frame,
+    )
 
 
 def train_personalized_real_predictor(
@@ -157,7 +175,9 @@ def train_personalized_real_predictor(
     model.fit(train[dataset.feature_columns], train[dataset.target_column])
     predicted = model.predict(test[dataset.feature_columns])
 
-    prediction_frame = test[["participant_id", "timestamp", "glucose_mg_dl", dataset.target_column]].copy()
+    prediction_frame = test[
+        ["participant_id", "timestamp", "glucose_mg_dl", dataset.target_column]
+    ].copy()
     prediction_frame["prediction_30m"] = predicted
     prediction_frame = prediction_frame.reset_index(drop=True)
 
@@ -170,7 +190,12 @@ def train_personalized_real_predictor(
         train_samples=len(train),
         train_participants=1,
     )
-    return RealTrainedPredictor(model=model, data=dataset, evaluation=evaluation, predictions=prediction_frame)
+    return RealTrainedPredictor(
+        model=model,
+        data=dataset,
+        evaluation=evaluation,
+        predictions=prediction_frame,
+    )
 
 
 def compare_real_models(
