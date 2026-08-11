@@ -5,7 +5,6 @@ import pandas as pd
 
 from .models import GlycemicMetrics
 
-
 # ADA 2026 standardized CGM ranges for most adults.
 LOW = 70.0
 VERY_LOW = 54.0
