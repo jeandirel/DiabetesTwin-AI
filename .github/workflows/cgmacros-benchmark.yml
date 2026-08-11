@@ -8,6 +8,7 @@ on:
       - "src/diabetestwin/cgmacros.py"
       - "src/diabetestwin/real_predictor.py"
       - "scripts/download_cgmacros.py"
+      - "scripts/diagnose_cgmacros.py"
       - "scripts/preprocess_cgmacros.py"
       - "scripts/train_real_model.py"
   workflow_dispatch:
@@ -26,6 +27,8 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: Download and verify official CGMacros v1.0.0
         run: python scripts/download_cgmacros.py
+      - name: Diagnose released sensor streams
+        run: python scripts/diagnose_cgmacros.py
       - name: Preprocess Dexcom forecasting data
         run: python scripts/preprocess_cgmacros.py --glucose-source dexcom
       - name: Compare grouped real-data models
