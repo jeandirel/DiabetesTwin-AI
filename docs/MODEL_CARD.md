@@ -53,7 +53,7 @@ Two scikit-learn baselines are included:
 - `HistGradientBoostingRegressor`;
 - `RandomForestRegressor`.
 
-Missing numeric features are median-imputed inside the training pipeline.
+Missing numeric features are median-imputed inside the training pipeline. Some participant-specific fits contain an activity feature that is entirely missing for that participant; scikit-learn drops such all-missing columns for that fit.
 
 ## Evaluation strategies
 
@@ -75,6 +75,40 @@ For a participant-specific digital twin, the earlier 70% of the participant's us
 
 This is a retrospective research evaluation, not a prospective clinical study.
 
+## Verified benchmark — 2026-08-11
+
+The complete official CGMacros v1.0.0 archive was downloaded, checked against the published SHA-256 value, and processed end to end.
+
+Preprocessing produced **621,069** usable +30-minute forecasting rows across **all 45 participants**.
+
+### Unseen-participant benchmark
+
+One fixed participant-level split contained 36 training participants and 9 unseen test participants.
+
+| Model | MAE (mg/dL) | RMSE (mg/dL) | Persistence MAE (mg/dL) |
+|---|---:|---:|---:|
+| Random Forest | **13.11** | **18.94** | 13.39 |
+| HistGradientBoosting | 13.40 | 19.27 | 13.39 |
+
+The Random Forest baseline improves persistence slightly on this split. HistGradientBoosting is essentially tied with persistence.
+
+### Personalized benchmark
+
+HistGradientBoosting was also trained separately for every participant with an earlier-70% / later-30% chronological split.
+
+- mean MAE: **12.63 mg/dL**
+- median MAE: **12.05 mg/dL**
+- mean RMSE: **17.97 mg/dL**
+- median RMSE: **16.92 mg/dL**
+- mean persistence MAE: **12.42 mg/dL**
+- median persistence MAE: **11.83 mg/dL**
+- participants beating persistence: **20 / 45**
+- participants tying persistence: **1 / 45**
+
+The personalized HGB model is therefore **not consistently better than persistence** in the current version. This result is treated as a limitation and a target for further research, not as evidence of clinical performance.
+
+See [`BENCHMARK_RESULTS.md`](BENCHMARK_RESULTS.md) for full methodology and interpretation.
+
 ## Data provenance
 
 Source: Gutierrez-Osuna R, Kerr D, Mortazavi B, Das A. *CGMacros: a scientific dataset for personalized nutrition and diet monitoring*. PhysioNet, version 1.0.0, 2025.
@@ -87,19 +121,26 @@ The repository does not redistribute CGMacros. The downloader obtains the offici
 
 Dates in CGMacros are privacy-shifted by the data providers. DiabetesTwin-AI does not attempt to recover original dates.
 
+The released merged participant files used by this project are aligned on a one-minute timestamp timeline. The preprocessing code infers this released cadence and validates elapsed-time lags/targets instead of assuming native sensor sampling intervals.
+
 ## Limitations
 
 - CGMacros is small for modern personalized forecasting: 45 participants.
 - The cohort is not an external clinical validation cohort for this project.
+- The reported grouped benchmark is one fixed participant split; repeated grouped cross-validation is still required.
+- Current personalized HGB performance does not consistently beat a persistence baseline.
 - Treatment variables such as insulin dosing are not modeled here.
 - Static demographics/labs can be incomplete.
+- Some Fitbit-derived features can be entirely missing for individual participants.
 - Missing and irregular sensor observations can reduce usable forecasting rows.
 - Performance may differ substantially by participant, diabetes status, sensor, behavior, and time period.
 - A 30-minute regression error alone is insufficient for clinical safety evaluation, especially near hypo/hyperglycemic ranges.
 - The current models do not provide calibrated predictive uncertainty.
+- No causal inference about meal, exercise, sleep, or stress effects should be made from these regressors.
 
 ## Validation still required before any clinical claim
 
+- repeated participant-level cross-validation;
 - prospective evaluation;
 - external validation on independent cohorts/sites;
 - calibrated uncertainty and coverage testing;
