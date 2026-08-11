@@ -23,6 +23,7 @@
 - 🧪 Interactive lifestyle **what-if** comparison
 - 🤖 Synthetic 30-minute-ahead forecasting baseline
 - 🌍 **Real PhysioNet CGMacros ingestion and preprocessing pipeline**
+- 🧳 **Bundled licensed CGMacros demo subset for instant deployments**
 - 🩸 Dexcom or Libre glucose parsing with meal, Fitbit, demographic and laboratory context
 - 👤 Participant-specific chronological forecasting evaluation
 - 👥 Participant-level holdout evaluation to reduce person leakage
@@ -113,9 +114,11 @@ streamlit run app.py
 
 Dashboard: `http://localhost:8501`
 
+The **🌍 Real CGMacros** tab works immediately with the small licensed demo subset committed in `data/demo/`. If the full preprocessed dataset is present locally, the dashboard automatically prefers it over the demo subset.
+
 ## Real CGMacros data
 
-The repository **does not redistribute the raw dataset**. The official CGMacros archive is about 627 MB and is licensed separately under **CC BY-NC-SA 4.0**.
+The repository **does not redistribute the full raw dataset**. The official CGMacros archive is about 627 MB and is licensed separately under **CC BY-NC-SA 4.0**. A small derived deployment subset is included under that same data license so hosted demos can show real CGM forecasting without downloading 627 MB at startup.
 
 Source:
 
@@ -124,6 +127,20 @@ Source:
 - Official page: `https://physionet.org/content/cgmacros/1.0.0/`
 
 CGMacros contains data from 45 participants: 15 healthy, 16 with prediabetes, and 14 with type 2 diabetes. It includes Dexcom G6 Pro and Abbott FreeStyle Libre Pro CGM data, Fitbit activity/heart rate, meal macronutrients, demographics, anthropometrics and laboratory variables.
+
+### Deployment demo subset
+
+`data/demo/cgmacros_demo.csv` is generated from the real preprocessed CGMacros forecasting table. By default it contains one released participant from each HbA1c-derived dataset group (healthy, prediabetes and type 2 diabetes), with about 48 hours of usable observations per participant.
+
+The exact selected IDs, released time ranges and row counts are recorded in `data/demo/cgmacros_demo.metadata.json`. Dates remain privacy-shifted exactly as released by the dataset authors.
+
+To rebuild the subset from the full official dataset:
+
+```bash
+python scripts/build_demo_dataset.py --hours 48
+```
+
+See [`data/demo/README.md`](data/demo/README.md) and [`THIRD_PARTY_DATA.md`](THIRD_PARTY_DATA.md) for attribution and licensing.
 
 ### 1. Download the official dataset
 
@@ -136,7 +153,7 @@ The downloader:
 1. downloads the official archive from the PhysioNet public distribution;
 2. verifies the published SHA-256 checksum;
 3. extracts to `data/raw/cgmacros/`;
-4. keeps the third-party dataset outside Git tracking.
+4. keeps the full third-party dataset outside Git tracking.
 
 ### 2. Inspect the released sensor streams
 
@@ -206,13 +223,11 @@ The evaluation reports MAE, RMSE and a persistence baseline. Model artifacts and
 
 ### 5. Explore a real participant in the dashboard
 
-After preprocessing:
-
 ```bash
 streamlit run app.py
 ```
 
-Open the **🌍 Real CGMacros** tab, choose a participant, inspect the released CGM trajectory, and train the participant-specific +30-minute model interactively.
+Open the **🌍 Real CGMacros** tab, choose a participant, inspect the released CGM trajectory, and train the participant-specific +30-minute model interactively. The dashboard uses the full `data/processed/cgmacros_forecasting.csv.gz` when available and otherwise falls back to `data/demo/cgmacros_demo.csv`.
 
 > CGMacros dates are privacy-shifted by the dataset authors. The project does not attempt to reverse that transformation.
 
@@ -276,7 +291,7 @@ docker compose up --build
 - Dashboard: `http://localhost:8501`
 - API: `http://localhost:8000/docs`
 
-Raw CGMacros data are not copied into the Docker image. Mount the local `data/` directory if you want the real-data tab inside a container.
+The Docker image includes only the small licensed `data/demo/` subset, not the full CGMacros archive. Mount a local `data/processed/` directory if you want the full preprocessed cohort inside the container; the dashboard automatically prefers the full table when present.
 
 ## Tests and quality
 
@@ -285,7 +300,7 @@ pytest -q
 ruff check .
 ```
 
-The normal CI uses small generated fixtures reproducing the CGMacros schema. The separate `CGMacros Full Benchmark` workflow downloads and verifies the official data, executes the full real-data benchmark and uploads only metric artifacts.
+The normal CI uses small generated fixtures reproducing the CGMacros schema. The separate `CGMacros Full Benchmark` workflow downloads and verifies the official data, executes the full real-data benchmark and uploads only metric artifacts. The demo-subset builder is deterministic with respect to the preprocessed table and records its selected participants in metadata.
 
 ## Scientific scope
 
@@ -313,6 +328,7 @@ See [`docs/RESEARCH.md`](docs/RESEARCH.md), [`docs/MODEL_CARD.md`](docs/MODEL_CA
 - [x] participant-level real-data baseline
 - [x] personalized chronological baseline across all participants
 - [x] real participant visualization in Streamlit
+- [x] licensed real-data deployment demo subset
 - [ ] repeated grouped cross-validation / leave-one-participant-out evaluation
 - [ ] feature ablations and stronger temporal baselines
 - [ ] calibrated predictive uncertainty
@@ -325,4 +341,4 @@ See [`docs/RESEARCH.md`](docs/RESEARCH.md), [`docs/MODEL_CARD.md`](docs/MODEL_CA
 
 Repository source code: **MIT** — see [`LICENSE`](LICENSE).
 
-CGMacros data: **CC BY-NC-SA 4.0**, owned/licensed by its original authors and distributed by PhysioNet. The raw dataset is not included in this repository. See [`THIRD_PARTY_DATA.md`](THIRD_PARTY_DATA.md).
+CGMacros data and the derived files under `data/demo/`: **CC BY-NC-SA 4.0**, owned/licensed by the original rights holders and distributed/derived with attribution to PhysioNet CGMacros. The full raw dataset is not included in this repository. See [`THIRD_PARTY_DATA.md`](THIRD_PARTY_DATA.md).

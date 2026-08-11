@@ -7,6 +7,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY app.py api.py ./
+COPY data/demo ./data/demo
 RUN pip install --no-cache-dir .
 
 EXPOSE 8501

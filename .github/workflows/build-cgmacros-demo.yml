@@ -1,0 +1,48 @@
+name: Build CGMacros Demo Subset
+
+on:
+  push:
+    branches: [feat/cgmacros-demo-subset]
+    paths:
+      - ".github/workflows/build-cgmacros-demo.yml"
+      - "scripts/build_demo_dataset.py"
+
+permissions:
+  contents: write
+
+jobs:
+  build-demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/cgmacros-demo-subset
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Download official CGMacros archive
+        run: python scripts/download_cgmacros.py
+      - name: Preprocess full Dexcom forecasting table
+        run: python scripts/preprocess_cgmacros.py --glucose-source dexcom
+      - name: Build three-participant deployment subset
+        run: python scripts/build_demo_dataset.py --hours 48
+      - name: Show generated metadata
+        run: cat data/demo/cgmacros_demo.metadata.json
+      - name: Commit licensed demo files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin feat/cgmacros-demo-subset
+          git rebase origin/feat/cgmacros-demo-subset
+          git add data/demo/cgmacros_demo.csv data/demo/cgmacros_demo.metadata.json
+          if git diff --cached --quiet; then
+            echo "Demo subset unchanged"
+            exit 0
+          fi
+          git commit -m "data: add licensed CGMacros deployment demo subset"
+          git push origin HEAD:feat/cgmacros-demo-subset

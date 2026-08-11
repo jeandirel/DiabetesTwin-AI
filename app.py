@@ -15,6 +15,9 @@ from diabetestwin.predictor import train_virtual_patient_predictor
 from diabetestwin.real_predictor import train_personalized_real_predictor
 from diabetestwin.simulator import simulate_day
 
+FULL_CGMACROS_PATH = Path("data/processed/cgmacros_forecasting.csv.gz")
+DEMO_CGMACROS_PATH = Path("data/demo/cgmacros_demo.csv")
+
 st.set_page_config(page_title="DiabetesTwin-AI", page_icon="🧬", layout="wide")
 
 st.markdown(
@@ -210,17 +213,26 @@ with synthetic_model_tab:
     )
 
 with real_data_tab:
-    processed_path = Path("data/processed/cgmacros_forecasting.csv.gz")
     st.subheader("Real CGM + lifestyle data")
     st.markdown(
         "The real-data pipeline uses **PhysioNet CGMacros v1.0.0**: two CGMs, Fitbit activity/heart rate, "
         "meal macronutrients, demographics and laboratory variables from 45 participants."
     )
 
-    if not processed_path.exists():
+    if FULL_CGMACROS_PATH.exists():
+        processed_path = FULL_CGMACROS_PATH
+        data_mode = "full"
+    elif DEMO_CGMACROS_PATH.exists():
+        processed_path = DEMO_CGMACROS_PATH
+        data_mode = "demo"
+    else:
+        processed_path = None
+        data_mode = "missing"
+
+    if processed_path is None:
         st.info(
-            "Real data are intentionally not committed to GitHub. CGMacros is CC BY-NC-SA 4.0 and about "
-            "627 MB. Prepare it locally with the commands below."
+            "The full CGMacros archive is intentionally not committed to GitHub. Prepare it locally with the "
+            "commands below, or use a deployment/build that includes the licensed demo subset."
         )
         st.code(
             "python scripts/download_cgmacros.py\n"
@@ -231,6 +243,17 @@ with real_data_tab:
         st.caption("Source DOI: 10.13026/3z8q-x658 · dates in the released dataset are privacy-shifted.")
     else:
         real_dataset = load_preprocessed_dataset(processed_path)
+        if data_mode == "demo":
+            st.info(
+                "Deployment demo mode: this app is using a small CGMacros-derived subset bundled under "
+                "CC BY-NC-SA 4.0 (one released participant per dataset group, about 48 hours each). "
+                "Use the full download pipeline for research benchmarking."
+            )
+        else:
+            st.success(
+                f"Full preprocessed CGMacros table loaded: {len(real_dataset.participants)} participants available."
+            )
+
         participant_id = st.selectbox("CGMacros participant", real_dataset.participants)
         participant_frame = real_dataset.frame[
             real_dataset.frame["participant_id"].astype(str).str.zfill(3) == participant_id
@@ -317,9 +340,3 @@ with interoperability_tab:
         file_name="diabetestwin_fhir_bundle.json",
         mime="application/fhir+json",
     )
-
-st.divider()
-st.caption(
-    "DiabetesTwin-AI · student research prototype · synthetic simulator + optional real CGMacros pipeline · "
-    "no diagnosis or medication recommendations."
-)
