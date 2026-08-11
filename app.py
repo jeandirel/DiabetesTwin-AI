@@ -12,7 +12,6 @@ from diabetestwin.models import ExerciseEvent, LifestyleScenario, MealEvent, Pat
 from diabetestwin.predictor import train_virtual_patient_predictor
 from diabetestwin.simulator import simulate_day
 
-
 st.set_page_config(page_title="DiabetesTwin-AI", page_icon="🧬", layout="wide")
 
 st.markdown(
