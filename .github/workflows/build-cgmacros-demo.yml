@@ -37,6 +37,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin feat/cgmacros-demo-subset
+          git rebase origin/feat/cgmacros-demo-subset
           git add data/demo/cgmacros_demo.csv data/demo/cgmacros_demo.metadata.json
           if git diff --cached --quiet; then
             echo "Demo subset unchanged"
