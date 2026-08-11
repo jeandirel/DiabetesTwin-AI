@@ -5,7 +5,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from diabetestwin.cgmacros import load_cgmacros_dataset
+from diabetestwin.cgmacros import (
+    load_cgmacros_dataset,
+    load_preprocessed_dataset,
+    save_preprocessed_dataset,
+)
 from diabetestwin.real_predictor import train_grouped_real_predictor, train_personalized_real_predictor
 
 
@@ -70,6 +74,18 @@ def test_load_real_cgmacros_dataset(tmp_path: Path):
     assert dataset.target_column == "target_30m"
     assert dataset.frame["carbs_last_120m"].max() >= 55
     assert set(dataset.frame["diagnosis"].unique()) <= {"healthy", "prediabetes", "type2_diabetes"}
+
+
+def test_preprocessed_round_trip_preserves_participant_ids(tmp_path: Path):
+    dataset = load_cgmacros_dataset(_write_fixture(tmp_path / "raw"), glucose_source="dexcom")
+    path = save_preprocessed_dataset(dataset, tmp_path / "processed" / "forecast.csv.gz")
+    restored = load_preprocessed_dataset(path)
+
+    assert restored.participants == ["001", "002", "003", "004"]
+    assert restored.frame["participant_id"].iloc[0] == "001"
+
+    personalized = train_personalized_real_predictor(restored, "001", model_name="hgb", seed=3)
+    assert len(personalized.predictions) > 0
 
 
 def test_real_models_use_non_leaking_splits(tmp_path: Path):
