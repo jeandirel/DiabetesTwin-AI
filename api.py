@@ -7,7 +7,6 @@ from diabetestwin.metrics import compute_glycemic_metrics
 from diabetestwin.models import SimulationPoint, SimulationRequest, SimulationResponse
 from diabetestwin.simulator import simulate_day
 
-
 DISCLAIMER = (
     "Research/education prototype only. Synthetic virtual-patient outputs are not medical advice, "
     "a diagnosis, or a substitute for a validated CGM or clinician."
