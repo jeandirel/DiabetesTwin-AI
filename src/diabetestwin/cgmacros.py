@@ -24,7 +24,8 @@ class CGMacrosDataset:
 
     @property
     def participants(self) -> list[str]:
-        return sorted(self.frame["participant_id"].dropna().astype(str).unique().tolist())
+        values = self.frame["participant_id"].dropna().astype(str).str.zfill(3)
+        return sorted(values.unique().tolist())
 
 
 def _clean_columns(frame: pd.DataFrame) -> pd.DataFrame:
@@ -304,7 +305,13 @@ def load_preprocessed_dataset(
     glucose_source: str = "dexcom",
     horizon_minutes: int = 30,
 ) -> CGMacrosDataset:
-    frame = pd.read_csv(path, parse_dates=["timestamp", "target_timestamp"], low_memory=False)
+    frame = pd.read_csv(
+        path,
+        parse_dates=["timestamp", "target_timestamp"],
+        dtype={"participant_id": "string"},
+        low_memory=False,
+    )
+    frame["participant_id"] = frame["participant_id"].astype(str).str.zfill(3)
     feature_columns = [
         "glucose_mg_dl",
         "glucose_lag_15m",
