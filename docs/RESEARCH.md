@@ -4,7 +4,7 @@ Last reviewed: 2026-08-11.
 
 ## 1. CGM reporting
 
-The dashboard reports the standard glucose bands used in the American Diabetes Association's **Standards of Care in Diabetes—2026** for most adults using CGM:
+The dashboard reports common glucose bands used in the American Diabetes Association's **Standards of Care in Diabetes—2026** for many adults using CGM:
 
 - time in range (TIR): 70–180 mg/dL;
 - below range: <70 mg/dL;
@@ -24,30 +24,85 @@ Reference: Visentin R, Dalla Man C, Kovatchev B, Cobelli C. *The University of V
 
 ## 3. Recent digital-twin evidence
 
-A 2026 randomized pilot reported a human-in-the-loop predictive digital-twin workflow for type 2 diabetes using longitudinal glucose, food, activity, and weight data, with the model periodically retrained as new patient data accrued. That direction motivates the future architecture here: longitudinal personalization + explicit human/clinical oversight.
+A 2026 randomized pilot reported a human-in-the-loop predictive digital-twin workflow for type 2 diabetes using longitudinal glucose, food, activity, and weight data, with the model periodically retrained as new patient data accrued. That direction motivates the architecture here: longitudinal personalization plus explicit human/clinical oversight.
 
 Reference: Wang J et al. *Human-in-the-loop AI predictive digital twin to extend virtual precision diabetes care between visits*. npj Health Systems. 2026;3:59.
 
-## 4. Candidate real-world dataset
+## 4. Real-world dataset now integrated
 
-PhysioNet CGMacros v1.0.0 is open access and includes data from 45 participants (15 healthy adults, 16 with prediabetes, 14 with type 2 diabetes), with CGM, known meal macronutrients, physical activity, demographics and additional health measurements across ten days.
+PhysioNet **CGMacros v1.0.0** is the real-data foundation implemented in this repository. It contains data from 45 participants: 15 healthy adults, 16 with prediabetes, and 14 with type 2 diabetes, with approximately ten days of monitoring per participant.
+
+The study includes:
+
+- Abbott FreeStyle Libre Pro CGM;
+- Dexcom G6 Pro CGM;
+- Fitbit Sense heart rate and activity variables;
+- breakfast, lunch and dinner timestamps;
+- meal calories, carbohydrates, protein, fat and fiber;
+- demographics and anthropometrics;
+- HbA1c, fasting glucose, insulin and lipid laboratory variables;
+- food photographs and microbiome-related supplementary files.
 
 Reference: Gutierrez-Osuna R, Kerr D, Mortazavi B, Das A. *CGMacros: a scientific dataset for personalized nutrition and diet monitoring*. PhysioNet. 2025. doi:10.13026/3z8q-x658.
 
-## 5. Interoperability
+The raw archive is not committed because it is roughly 627 MB and carries its own **CC BY-NC-SA 4.0** license. The repository downloader fetches it from PhysioNet and verifies the published SHA-256 checksum.
 
-FHIR `Observation` is the HL7 resource for patient measurements such as blood glucose. The project exports synthetic glucose points as minimal FHIR R5 Observation resources using LOINC 15074-8 and UCUM `mg/dL`.
+## 5. Forecasting question
+
+The implemented supervised task is:
+
+> Given the participant's current/recent glucose, time of day, recent meal macronutrients, recent activity/heart-rate context, and available baseline characteristics, what is the measured glucose approximately 30 minutes later?
+
+The task is deliberately framed as forecasting, not treatment recommendation.
+
+## 6. Leakage-aware evaluation
+
+CGM points from one person are highly autocorrelated. A random row split would therefore produce overly optimistic estimates.
+
+The project implements two evaluation settings:
+
+1. **Participant holdout:** entire people are separated between train and test with `GroupShuffleSplit`.
+2. **Personalized temporal holdout:** for one participant, the earlier 70% of usable observations trains the model and the later 30% is held out.
+
+Every real-data evaluation also reports a simple persistence baseline: current glucose used as the +30-minute forecast.
+
+## 7. Current real-data models
+
+Two transparent classical baselines are implemented:
+
+- HistGradientBoostingRegressor;
+- RandomForestRegressor.
+
+These are appropriate first baselines for a small 45-participant dataset. More complex sequence models should only be added when they are compared fairly against leakage-controlled baselines and evaluated with enough data.
+
+## 8. Interoperability
+
+FHIR `Observation` is the HL7 resource for patient measurements such as blood glucose. The project currently exports synthetic glucose points as minimal FHIR R5 Observation resources using LOINC 15074-8 and UCUM `mg/dL`.
 
 Reference: HL7 FHIR R5, `Observation` resource and glucose example.
 
-## 6. Recommended next research phase
+## 9. Research milestones
 
-1. Freeze this synthetic MVP and document assumptions.
-2. Build a CGMacros ingestion notebook/pipeline without committing the 600+ MB dataset to Git.
-3. Define patient-level splits and a baseline persistence model.
-4. Compare linear/GBDT/sequence models with MAE, RMSE and clinically stratified errors.
-5. Add uncertainty estimation and calibration.
-6. Personalize using transfer learning or patient-specific fine-tuning.
-7. Run ablations for meal/activity/sleep/stress features.
-8. Add model/data cards, privacy assessment and human-in-the-loop review.
-9. Only after formal validation, consider any clinical-study interface.
+Completed:
+
+1. synthetic virtual-patient simulator;
+2. interactive lifestyle what-if dashboard;
+3. synthetic forecasting software baseline;
+4. official CGMacros download/checksum pipeline;
+5. schema-aware real-data preprocessing;
+6. participant-level holdout baseline;
+7. personalized chronological baseline;
+8. persistence baseline;
+9. real CGM visualization and +30-minute prediction overlay.
+
+Next scientifically meaningful work:
+
+1. run and report the full CGMacros benchmark on the complete downloaded dataset;
+2. quantify participant-to-participant error distribution, not only aggregate MAE/RMSE;
+3. evaluate Dexcom and Libre separately;
+4. add calibrated predictive intervals;
+5. perform feature ablations for meals, Fitbit variables and static clinical variables;
+6. compare against sequence models only after strong tabular/time-series baselines;
+7. externally validate on an independent public or prospectively collected cohort;
+8. define subgroup/fairness analyses with adequate statistical power;
+9. create a prospective human-in-the-loop research protocol before any clinical-facing extension.
