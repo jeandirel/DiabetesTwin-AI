@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diabetestwin-ai"
+version = "0.1.0"
+description = "Predictive digital twin for personalized glucose monitoring and lifestyle simulation."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+  {name = "Regis LIKASSI"},
+  {name = "Hakim DJOMO"},
+  {name = "Jean Direl NZE"},
+  {name = "Xavier ONDO"},
+  {name = "Seth NDINGA"}
+]
+dependencies = [
+  "fastapi>=0.115,<1",
+  "joblib>=1.4,<2",
+  "numpy>=1.26,<3",
+  "pandas>=2.2,<3",
+  "plotly>=5.24,<7",
+  "pydantic>=2.8,<3",
+  "scikit-learn>=1.5,<2",
+  "streamlit>=1.40,<2",
+  "uvicorn[standard]>=0.30,<1"
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.27,<1",
+  "pytest>=8,<9",
+  "ruff>=0.8,<1"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
