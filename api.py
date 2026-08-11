@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 
 from diabetestwin.fhir import dataframe_to_fhir_observations
 from diabetestwin.metrics import compute_glycemic_metrics
@@ -17,6 +18,11 @@ app = FastAPI(
     version="0.1.0",
     description="Predictive virtual-patient glucose simulation for research and education.",
 )
+
+
+@app.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/health")
