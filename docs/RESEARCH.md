@@ -47,6 +47,8 @@ Reference: Gutierrez-Osuna R, Kerr D, Mortazavi B, Das A. *CGMacros: a scientifi
 
 The raw archive is not committed because it is roughly 627 MB and carries its own **CC BY-NC-SA 4.0** license. The repository downloader fetches it from PhysioNet and verifies the published SHA-256 checksum.
 
+During full-release validation, the merged participant CSV files were observed to use a one-minute timestamp timeline. The preprocessing implementation now infers released cadence and validates lags/targets by elapsed time rather than assuming native sensor cadence.
+
 ## 5. Forecasting question
 
 The implemented supervised task is:
@@ -66,14 +68,31 @@ The project implements two evaluation settings:
 
 Every real-data evaluation also reports a simple persistence baseline: current glucose used as the +30-minute forecast.
 
-## 7. Current real-data models
+## 7. Current real-data models and verified benchmark
 
 Two transparent classical baselines are implemented:
 
 - HistGradientBoostingRegressor;
 - RandomForestRegressor.
 
-These are appropriate first baselines for a small 45-participant dataset. More complex sequence models should only be added when they are compared fairly against leakage-controlled baselines and evaluated with enough data.
+The full checksum-verified CGMacros release produced **621,069 usable forecasting rows across all 45 participants**.
+
+For one participant-level split with 36 people in train and 9 unseen people in test:
+
+- Random Forest MAE: **13.11 mg/dL**, RMSE: **18.94 mg/dL**;
+- HistGradientBoosting MAE: **13.40 mg/dL**, RMSE: **19.27 mg/dL**;
+- persistence MAE: **13.39 mg/dL**.
+
+For participant-specific HistGradientBoosting models using a chronological 70/30 split across all 45 participants:
+
+- mean MAE: **12.63 mg/dL**;
+- median MAE: **12.05 mg/dL**;
+- mean persistence MAE: **12.42 mg/dL**;
+- personalized HGB beat persistence for **20 of 45** participants and tied for one.
+
+The current personalized baseline therefore does **not** demonstrate consistent superiority over persistence. This is a useful negative/neutral result that motivates stronger validation and model design rather than inflated claims.
+
+Detailed benchmark methodology and results are in [`BENCHMARK_RESULTS.md`](BENCHMARK_RESULTS.md).
 
 ## 8. Interoperability
 
@@ -90,19 +109,22 @@ Completed:
 3. synthetic forecasting software baseline;
 4. official CGMacros download/checksum pipeline;
 5. schema-aware real-data preprocessing;
-6. participant-level holdout baseline;
-7. personalized chronological baseline;
-8. persistence baseline;
-9. real CGM visualization and +30-minute prediction overlay.
+6. validation of the full release across all 45 participants;
+7. 621k+ leakage-aware +30-minute forecasting rows;
+8. participant-level holdout baselines;
+9. personalized chronological benchmark across all participants;
+10. persistence baseline comparison;
+11. real CGM visualization and +30-minute prediction overlay.
 
 Next scientifically meaningful work:
 
-1. run and report the full CGMacros benchmark on the complete downloaded dataset;
-2. quantify participant-to-participant error distribution, not only aggregate MAE/RMSE;
+1. repeated participant-level GroupKFold / leave-one-participant-out evaluation;
+2. quantify errors by participant and glycemic region, not only aggregate MAE/RMSE;
 3. evaluate Dexcom and Libre separately;
 4. add calibrated predictive intervals;
-5. perform feature ablations for meals, Fitbit variables and static clinical variables;
-6. compare against sequence models only after strong tabular/time-series baselines;
-7. externally validate on an independent public or prospectively collected cohort;
-8. define subgroup/fairness analyses with adequate statistical power;
-9. create a prospective human-in-the-loop research protocol before any clinical-facing extension.
+5. perform feature ablations for glucose history, meals, Fitbit variables and static clinical variables;
+6. add missingness indicators and improve handling of participant-specific all-missing Fitbit variables;
+7. test richer temporal features and only then compare sequence models against persistence/tree baselines;
+8. externally validate on an independent public or prospectively collected cohort;
+9. define subgroup/fairness analyses with adequate statistical power;
+10. create a prospective human-in-the-loop research protocol before any clinical-facing extension.
