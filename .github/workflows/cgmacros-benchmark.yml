@@ -1,0 +1,61 @@
+name: CGMacros Full Benchmark
+
+on:
+  push:
+    branches: [benchmark/cgmacros-full]
+    paths:
+      - ".github/workflows/cgmacros-benchmark.yml"
+      - "src/diabetestwin/cgmacros.py"
+      - "src/diabetestwin/real_predictor.py"
+      - "scripts/download_cgmacros.py"
+      - "scripts/diagnose_cgmacros.py"
+      - "scripts/preprocess_cgmacros.py"
+      - "scripts/train_real_model.py"
+      - "scripts/benchmark_personalized.py"
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Download and verify official CGMacros v1.0.0
+        run: python scripts/download_cgmacros.py
+      - name: Diagnose released sensor streams
+        run: python scripts/diagnose_cgmacros.py
+      - name: Preprocess Dexcom forecasting data
+        run: python scripts/preprocess_cgmacros.py --glucose-source dexcom
+      - name: Compare grouped real-data models
+        run: python scripts/train_real_model.py --compare --split grouped
+      - name: Train grouped HGB baseline
+        run: python scripts/train_real_model.py --model hgb --split grouped
+      - name: Benchmark personalized HGB models
+        run: python scripts/benchmark_personalized.py --model hgb
+      - name: Print benchmark outputs
+        run: |
+          echo "=== Dataset summary ==="
+          cat data/processed/cgmacros_forecasting.csv.gz.summary.json
+          echo "=== Grouped model comparison ==="
+          cat artifacts/cgmacros_grouped_comparison.csv
+          echo "=== Grouped HGB metrics ==="
+          cat artifacts/cgmacros_hgb_grouped_metrics.json
+          echo "=== Personalized HGB summary ==="
+          cat artifacts/cgmacros_personalized_hgb_summary.json
+      - name: Upload benchmark metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: cgmacros-benchmark-metrics
+          path: |
+            data/processed/cgmacros_forecasting.csv.gz.summary.json
+            artifacts/cgmacros_grouped_comparison.csv
+            artifacts/cgmacros_hgb_grouped_metrics.json
+            artifacts/cgmacros_personalized_hgb_by_participant.csv
+            artifacts/cgmacros_personalized_hgb_summary.json
+          retention-days: 14

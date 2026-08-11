@@ -23,7 +23,7 @@
 - 🧪 Interactive lifestyle **what-if** comparison
 - 🤖 Synthetic 30-minute-ahead forecasting baseline
 - 🌍 **Real PhysioNet CGMacros ingestion and preprocessing pipeline**
-- 🩸 Dexcom G6 or Libre glucose parsing with meal, Fitbit, demographic and laboratory context
+- 🩸 Dexcom or Libre glucose parsing with meal, Fitbit, demographic and laboratory context
 - 👤 Participant-specific chronological forecasting evaluation
 - 👥 Participant-level holdout evaluation to reduce person leakage
 - 🌲 HistGradientBoosting and Random Forest real-data baselines
@@ -32,7 +32,24 @@
 - ⚡ FastAPI endpoints
 - 🐳 Docker Compose
 - ✅ Unit/API/real-data pipeline tests and GitHub Actions CI
-- 📚 Architecture, model card, research plan and third-party data notice
+- 📚 Architecture, model card, research plan, benchmark report and third-party data notice
+
+## Verified real-data benchmark
+
+The full official CGMacros v1.0.0 archive has been downloaded, checksum-verified, preprocessed and benchmarked end to end with GitHub Actions.
+
+- **45 / 45 participants** processed
+- **621,069** usable +30-minute forecasting rows
+- grouped split: **36 train participants / 9 unseen test participants**
+- Random Forest grouped MAE: **13.11 mg/dL**
+- HistGradientBoosting grouped MAE: **13.40 mg/dL**
+- grouped persistence MAE: **13.39 mg/dL**
+- personalized HGB median MAE across 45 participants: **12.05 mg/dL**
+- personalized HGB beats persistence for **20 / 45** participants and ties for 1
+
+The current personalized baseline therefore **does not consistently outperform persistence**. That limitation is reported explicitly rather than hidden.
+
+See [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md) for methodology, metrics and interpretation.
 
 ## Architecture
 
@@ -116,15 +133,23 @@ python scripts/download_cgmacros.py
 
 The downloader:
 
-1. downloads directly from PhysioNet;
-2. verifies the official SHA-256 checksum;
+1. downloads the official archive from the PhysioNet public distribution;
+2. verifies the published SHA-256 checksum;
 3. extracts to `data/raw/cgmacros/`;
 4. keeps the third-party dataset outside Git tracking.
 
-### 2. Build the forecasting table
+### 2. Inspect the released sensor streams
 
 ```bash
-python scripts/preprocess_cgmacros.py
+python scripts/diagnose_cgmacros.py
+```
+
+An important implementation detail discovered during full-data validation is that the **released merged participant CSVs are aligned on a one-minute timestamp timeline**. The preprocessing code therefore infers the released cadence from each file and validates lags/targets by actual elapsed time instead of assuming native sensor cadence.
+
+### 3. Build the forecasting table
+
+```bash
+python scripts/preprocess_cgmacros.py --glucose-source dexcom
 ```
 
 Default output:
@@ -137,27 +162,27 @@ The pipeline creates 30-minute forecasting samples with features including:
 
 - current glucose;
 - glucose lags at 15 and 30 minutes;
-- recent glucose slope;
+- recent glucose change;
 - time-of-day cyclical features;
 - carbohydrates/protein/fat/fiber in the previous 120 minutes;
 - rolling heart rate, METs and activity calories;
 - age, BMI, HbA1c, fasting glucose and fasting insulin.
 
-Dexcom is used by default because the study sampled it more frequently than Libre. To use Libre:
+Dexcom is the default selected glucose signal for the current benchmark. Libre can be evaluated separately:
 
 ```bash
 python scripts/preprocess_cgmacros.py --glucose-source libre
 ```
 
-### 3. Compare real-data models
+### 4. Compare real-data models
 
 Strict participant-level holdout:
 
 ```bash
-python scripts/train_real_model.py --compare
+python scripts/train_real_model.py --compare --split grouped
 ```
 
-This keeps entire participants in either train or test, rather than randomly mixing adjacent measurements from the same person.
+This keeps entire participants in either train or test rather than randomly mixing correlated measurements from the same person.
 
 Train one grouped model:
 
@@ -171,9 +196,15 @@ Train a personalized model for one participant using an earlier-70% / later-30% 
 python scripts/train_real_model.py --model hgb --split personalized --participant 001
 ```
 
+Benchmark the personalized HGB model across **all 45 participants**:
+
+```bash
+python scripts/benchmark_personalized.py --model hgb
+```
+
 The evaluation reports MAE, RMSE and a persistence baseline. Model artifacts and prediction CSV files are written locally to `artifacts/` and ignored by Git.
 
-### 4. Explore a real patient in the dashboard
+### 5. Explore a real participant in the dashboard
 
 After preprocessing:
 
@@ -254,19 +285,19 @@ pytest -q
 ruff check .
 ```
 
-The CI tests use small generated fixtures that reproduce the CGMacros schema. The 627 MB third-party dataset is not downloaded during CI.
+The normal CI uses small generated fixtures reproducing the CGMacros schema. The separate `CGMacros Full Benchmark` workflow downloads and verifies the official data, executes the full real-data benchmark and uploads only metric artifacts.
 
 ## Scientific scope
 
 The project deliberately separates three claims:
 
 1. **Synthetic simulator:** useful for software demonstration and what-if interaction, but not clinically validated physiology.
-2. **Real-data forecasting:** trained/evaluated on the public CGMacros research dataset, but still not a clinical model.
+2. **Real-data forecasting:** trained/evaluated on the public CGMacros research dataset with leakage-aware splits, but still not a clinical model.
 3. **Digital twin research direction:** a future validated system would require prospective evaluation, calibration, external cohorts, uncertainty estimation, subgroup analysis and clinical governance.
 
 The project is inspired by established in-silico diabetes simulation work, but it is not the UVA/Padova simulator and makes no regulatory claim.
 
-See [`docs/RESEARCH.md`](docs/RESEARCH.md), [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md), and [`THIRD_PARTY_DATA.md`](THIRD_PARTY_DATA.md).
+See [`docs/RESEARCH.md`](docs/RESEARCH.md), [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md), [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md), and [`THIRD_PARTY_DATA.md`](THIRD_PARTY_DATA.md).
 
 ## Roadmap
 
@@ -278,9 +309,12 @@ See [`docs/RESEARCH.md`](docs/RESEARCH.md), [`docs/MODEL_CARD.md`](docs/MODEL_CA
 - [x] automated tests / CI
 - [x] official CGMacros downloader with checksum verification
 - [x] real CGMacros preprocessing
+- [x] full-data validation on all 45 participants
 - [x] participant-level real-data baseline
-- [x] personalized chronological baseline
-- [x] real patient visualization in Streamlit
+- [x] personalized chronological baseline across all participants
+- [x] real participant visualization in Streamlit
+- [ ] repeated grouped cross-validation / leave-one-participant-out evaluation
+- [ ] feature ablations and stronger temporal baselines
 - [ ] calibrated predictive uncertainty
 - [ ] external dataset validation
 - [ ] subgroup/fairness analysis with adequate sample sizes
