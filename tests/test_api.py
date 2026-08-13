@@ -9,8 +9,11 @@ def test_root_dashboard():
     response = client.get("/")
     assert response.status_code == 200
     assert "DiabetesTwin-AI" in response.text
-    assert "Digital twin simulation" in response.text
-    assert "Real CGM explorer" in response.text
+    assert "My Digital Twin" in response.text
+    assert "What-if Simulator" in response.text
+    assert "Real CGM Explorer" in response.text
+    assert "AI Glucose Forecasting" in response.text
+    assert "Model Governance" in response.text
 
 
 def test_health():
