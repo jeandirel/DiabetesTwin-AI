@@ -3,14 +3,10 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
-from diabetestwin.fhir import dataframe_to_fhir_observations
-from diabetestwin.metrics import compute_glycemic_metrics
-from diabetestwin.models import SimulationPoint, SimulationRequest, SimulationResponse
-from diabetestwin.simulator import simulate_day
+from diabetestwin.models import SimulationRequest, SimulationResponse
 from diabetestwin.web_dashboard import DASHBOARD_HTML
 
 DISCLAIMER = (
@@ -21,7 +17,7 @@ DEMO_CGMACROS_PATH = Path("data/demo/cgmacros_demo.csv")
 
 app = FastAPI(
     title="DiabetesTwin-AI API",
-    version="0.2.0",
+    version="0.2.1",
     description="Predictive virtual-patient glucose simulation for research and education.",
 )
 
@@ -38,6 +34,10 @@ def health() -> dict[str, str]:
 
 @app.post("/simulate", response_model=SimulationResponse)
 def simulate(request: SimulationRequest) -> SimulationResponse:
+    from diabetestwin.metrics import compute_glycemic_metrics
+    from diabetestwin.models import SimulationPoint
+    from diabetestwin.simulator import simulate_day
+
     frame = simulate_day(
         request.patient,
         request.scenario,
@@ -50,7 +50,9 @@ def simulate(request: SimulationRequest) -> SimulationResponse:
 
 
 @lru_cache(maxsize=1)
-def _load_demo_cgmacros() -> pd.DataFrame:
+def _load_demo_cgmacros():
+    import pandas as pd
+
     if not DEMO_CGMACROS_PATH.exists():
         raise FileNotFoundError(DEMO_CGMACROS_PATH)
     frame = pd.read_csv(DEMO_CGMACROS_PATH)
@@ -64,6 +66,10 @@ def demo_cgmacros(
     participant_id: str = Query(default="001", min_length=1, max_length=8),
     max_points: int = Query(default=600, ge=100, le=1200),
 ) -> dict:
+    import pandas as pd
+
+    from diabetestwin.metrics import compute_glycemic_metrics
+
     try:
         frame = _load_demo_cgmacros()
     except FileNotFoundError as exc:
@@ -107,6 +113,9 @@ def demo_cgmacros(
 
 @app.post("/fhir/observations")
 def fhir_observations(request: SimulationRequest) -> dict:
+    from diabetestwin.fhir import dataframe_to_fhir_observations
+    from diabetestwin.simulator import simulate_day
+
     frame = simulate_day(
         request.patient,
         request.scenario,
