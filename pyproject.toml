@@ -18,17 +18,19 @@ authors = [
 ]
 dependencies = [
   "fastapi>=0.115,<1",
+  "pydantic>=2.8,<3"
+]
+
+[project.optional-dependencies]
+full = [
   "joblib>=1.4,<2",
   "numpy>=1.26,<3",
   "pandas>=2.2,<3",
   "plotly>=5.24,<7",
-  "pydantic>=2.8,<3",
   "scikit-learn>=1.5,<2",
   "streamlit>=1.40,<2",
   "uvicorn[standard]>=0.30,<1"
 ]
-
-[project.optional-dependencies]
 dev = [
   "httpx>=0.27,<1",
   "pytest>=8,<9",
