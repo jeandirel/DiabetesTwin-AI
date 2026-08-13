@@ -8,7 +8,7 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 COPY app.py api.py ./
 COPY data/demo ./data/demo
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[full]"
 
 EXPOSE 8501
 CMD ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501"]
